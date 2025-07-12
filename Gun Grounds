@@ -1,5 +1,6 @@
+-- OPEN SOURCED
 local Version = "1.0.0"
-local LatestVersion = game:HttpGet("https://raw.githubusercontent.com/YourName/YourRepo/main/version.txt")
+local LatestVersion = game:HttpGet("https://github.com/Hwrhero13gmailcom/Zenith-HUB/blob/main/Gun%20Grounds")
 
 if Version ~= LatestVersion then
     warn("New version available! Please update.")
