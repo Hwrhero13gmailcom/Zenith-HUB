@@ -1,0 +1,487 @@
+local Version = "1.0.0"
+local LatestVersion = game:HttpGet("https://raw.githubusercontent.com/YourName/YourRepo/main/version.txt")
+
+if Version ~= LatestVersion then
+    warn("New version available! Please update.")
+end
+
+-- Gun Grounds Ultimate (No External UI Library)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Create main ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GunGroundsUI"
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
+
+-- Create main frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 350, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -175, 0.5, -200)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+-- Title bar
+local Title = Instance.new("TextLabel")
+Title.Name = "Title"
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Title.BorderSizePixel = 0
+Title.Text = "🔫 Gun Grounds Ultimate"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.Parent = MainFrame
+
+-- Close button
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -30, 0, 0)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.BorderSizePixel = 0
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.new(1, 1, 1)
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 14
+CloseButton.Parent = MainFrame
+
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Tab system
+local Tabs = {"Player", "Combat", "Visuals"}
+local TabButtons = {}
+local TabFrames = {}
+
+-- Create tabs
+for i, tabName in ipairs(Tabs) do
+    -- Tab button
+    local TabButton = Instance.new("TextButton")
+    TabButton.Name = tabName.."Tab"
+    TabButton.Size = UDim2.new(0.33, -2, 0, 30)
+    TabButton.Position = UDim2.new((i-1)*0.33, 0, 0, 30)
+    TabButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    TabButton.BorderSizePixel = 0
+    TabButton.Text = (i == 1 and "👤 " or i == 2 and "⚔️ " or "👁️ ")..tabName
+    TabButton.TextColor3 = Color3.new(1, 1, 1)
+    TabButton.Font = Enum.Font.Gotham
+    TabButton.TextSize = 12
+    TabButton.Parent = MainFrame
+    
+    -- Tab frame
+    local TabFrame = Instance.new("Frame")
+    TabFrame.Name = tabName.."Frame"
+    TabFrame.Size = UDim2.new(1, 0, 1, -60)
+    TabFrame.Position = UDim2.new(0, 0, 0, 60)
+    TabFrame.BackgroundTransparency = 1
+    TabFrame.Visible = i == 1
+    TabFrame.Parent = MainFrame
+    
+    -- Scrolling frame
+    local ScrollFrame = Instance.new("ScrollingFrame")
+    ScrollFrame.Name = "ScrollFrame"
+    ScrollFrame.Size = UDim2.new(1, 0, 1, 0)
+    ScrollFrame.Position = UDim2.new(0, 0, 0, 0)
+    ScrollFrame.BackgroundTransparency = 1
+    ScrollFrame.ScrollBarThickness = 5
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 800)
+    ScrollFrame.Parent = TabFrame
+    
+    TabButtons[tabName] = TabButton
+    TabFrames[tabName] = ScrollFrame
+    
+    TabButton.MouseButton1Click:Connect(function()
+        for name, frame in pairs(TabFrames) do
+            frame.Visible = (name == tabName)
+        end
+        for name, button in pairs(TabButtons) do
+            button.BackgroundColor3 = (name == tabName) and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(40, 40, 40)
+        end
+    end)
+end
+
+-- Make window draggable
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function updateInput(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateInput(input)
+    end
+end)
+
+-- ===== PLAYER FUNCTIONS =====
+local PlayerTab = TabFrames["Player"]
+local WalkSpeed = 16
+local JumpPower = 50
+local InfiniteJump = false
+local Noclip = false
+local FlyEnabled = false
+local FlySpeed = 50
+local FlyToggled = false
+local FlyConnections = {}
+
+-- Create UI elements for Player tab
+local function createSlider(parent, name, min, max, default, callback)
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Name = name.."Slider"
+    sliderFrame.Size = UDim2.new(1, -20, 0, 50)
+    sliderFrame.Position = UDim2.new(0, 10, 0, #parent:GetChildren() * 55)
+    sliderFrame.BackgroundTransparency = 1
+    sliderFrame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name..": "..default
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 12
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = sliderFrame
+    
+    local slider = Instance.new("Frame")
+    slider.Name = "Track"
+    slider.Size = UDim2.new(1, 0, 0, 10)
+    slider.Position = UDim2.new(0, 0, 0, 25)
+    slider.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    slider.BorderSizePixel = 0
+    slider.Parent = sliderFrame
+    
+    local fill = Instance.new("Frame")
+    fill.Name = "Fill"
+    fill.Size = UDim2.new((default-min)/(max-min), 0, 1, 0)
+    fill.Position = UDim2.new(0, 0, 0, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    fill.BorderSizePixel = 0
+    fill.Parent = slider
+    
+    local button = Instance.new("TextButton")
+    button.Name = "Button"
+    button.Size = UDim2.new(0, 15, 0, 15)
+    button.Position = UDim2.new((default-min)/(max-min), -7, 0.5, -7)
+    button.BackgroundColor3 = Color3.new(1, 1, 1)
+    button.BorderSizePixel = 0
+    button.Text = ""
+    button.Parent = slider
+    
+    local function updateValue(value)
+        local percent = (value-min)/(max-min)
+        fill.Size = UDim2.new(percent, 0, 1, 0)
+        button.Position = UDim2.new(percent, -7, 0.5, -7)
+        label.Text = name..": "..value
+        callback(value)
+    end
+    
+    local dragging = false
+    button.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local percent = (input.Position.X - slider.AbsolutePosition.X)/slider.AbsoluteSize.X
+            local value = math.floor(min + (max-min) * math.clamp(percent, 0, 1) + 0.5)
+            updateValue(value)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local percent = (input.Position.X - slider.AbsolutePosition.X)/slider.AbsoluteSize.X
+            local value = math.floor(min + (max-min) * math.clamp(percent, 0, 1) + 0.5)
+            updateValue(value)
+        end
+    end)
+    
+    return {Update = updateValue}
+end
+
+-- WalkSpeed Slider
+local walkSpeedSlider = createSlider(PlayerTab, "WalkSpeed", 16, 100, WalkSpeed, function(value)
+    WalkSpeed = value
+    pcall(function()
+        LocalPlayer.Character.Humanoid.WalkSpeed = value
+    end)
+end)
+
+-- JumpPower Slider
+local jumpPowerSlider = createSlider(PlayerTab, "JumpPower", 50, 200, JumpPower, function(value)
+    JumpPower = value
+    pcall(function()
+        LocalPlayer.Character.Humanoid.JumpPower = value
+    end)
+end)
+
+-- Infinite Jump Toggle
+local infiniteJumpToggle = Instance.new("TextButton")
+infiniteJumpToggle.Name = "InfiniteJumpToggle"
+infiniteJumpToggle.Size = UDim2.new(1, -20, 0, 30)
+infiniteJumpToggle.Position = UDim2.new(0, 10, 0, #PlayerTab:GetChildren() * 55)
+infiniteJumpToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+infiniteJumpToggle.BorderSizePixel = 0
+infiniteJumpToggle.Text = "Infinite Jump: OFF"
+infiniteJumpToggle.TextColor3 = Color3.new(1, 1, 1)
+infiniteJumpToggle.Font = Enum.Font.Gotham
+infiniteJumpToggle.TextSize = 12
+infiniteJumpToggle.Parent = PlayerTab
+
+infiniteJumpToggle.MouseButton1Click:Connect(function()
+    InfiniteJump = not InfiniteJump
+    infiniteJumpToggle.Text = "Infinite Jump: "..(InfiniteJump and "ON" or "OFF")
+    infiniteJumpToggle.BackgroundColor3 = InfiniteJump and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(60, 60, 60)
+    
+    if InfiniteJump then
+        UserInputService.JumpRequest:Connect(function()
+            if InfiniteJump and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+            end
+        end)
+    end
+end)
+
+-- ===== CHARACTER HANDLING =====
+LocalPlayer.CharacterAdded:Connect(function(character)
+    character:WaitForChild("Humanoid")
+    pcall(function()
+        character.Humanoid.WalkSpeed = WalkSpeed
+        character.Humanoid.JumpPower = JumpPower
+    end)
+end)
+
+-- Apply to current character if exists
+if LocalPlayer.Character then
+    pcall(function()
+        LocalPlayer.Character:WaitForChild("Humanoid").WalkSpeed = WalkSpeed
+        LocalPlayer.Character:WaitForChild("Humanoid").JumpPower = JumpPower
+    end)
+end
+
+-- ===== FLY SYSTEM =====
+local flyToggle = Instance.new("TextButton")
+flyToggle.Name = "FlyToggle"
+flyToggle.Size = UDim2.new(1, -20, 0, 30)
+flyToggle.Position = UDim2.new(0, 10, 0, #PlayerTab:GetChildren() * 55)
+flyToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+flyToggle.BorderSizePixel = 0
+flyToggle.Text = "Fly (Press E): OFF"
+flyToggle.TextColor3 = Color3.new(1, 1, 1)
+flyToggle.Font = Enum.Font.Gotham
+flyToggle.TextSize = 12
+flyToggle.Parent = PlayerTab
+
+flyToggle.MouseButton1Click:Connect(function()
+    FlyEnabled = not FlyEnabled
+    flyToggle.Text = "Fly (Press E): "..(FlyEnabled and "ON" or "OFF")
+    flyToggle.BackgroundColor3 = FlyEnabled and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(60, 60, 60)
+    
+    if not FlyEnabled then
+        FlyToggled = false
+        for _, conn in pairs(FlyConnections) do conn:Disconnect() end
+        FlyConnections = {}
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            for _, v in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+            end
+        end
+    end
+end)
+
+-- Fly Speed Slider
+local flySpeedSlider = createSlider(PlayerTab, "Fly Speed", 20, 150, FlySpeed, function(value)
+    FlySpeed = value
+end)
+
+-- Fly Activation
+table.insert(FlyConnections, UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.E and FlyEnabled then
+        FlyToggled = not FlyToggled
+        if FlyToggled then
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local torso = LocalPlayer.Character.HumanoidRootPart
+                local bg = Instance.new("BodyGyro", torso)
+                bg.P = 9e4
+                bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+                bg.cframe = torso.CFrame
+                local bv = Instance.new("BodyVelocity", torso)
+                bv.velocity = Vector3.new(0,0,0)
+                bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+                
+                table.insert(FlyConnections, RunService.Heartbeat:Connect(function()
+                    if not FlyToggled or not FlyEnabled or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        bg:Destroy(); bv:Destroy(); return
+                    end
+                    
+                    local cam = workspace.CurrentCamera.CFrame
+                    local move = Vector3.new()
+                    
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                        move = move + (cam.LookVector * FlySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                        move = move - (cam.LookVector * FlySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                        move = move - (cam.RightVector * FlySpeed)
+                    end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                        move = move + (cam.RightVector * FlySpeed)
+                    end
+                    
+                    bv.velocity = move
+                    bg.cframe = cam
+                end))
+            end
+        else
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                for _,v in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                    if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+                end
+            end
+        end
+    end
+end))
+
+-- ===== NO CLIP =====
+local noclipToggle = Instance.new("TextButton")
+noclipToggle.Name = "NoclipToggle"
+noclipToggle.Size = UDim2.new(1, -20, 0, 30)
+noclipToggle.Position = UDim2.new(0, 10, 0, #PlayerTab:GetChildren() * 55)
+noclipToggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+noclipToggle.BorderSizePixel = 0
+noclipToggle.Text = "Noclip: OFF"
+noclipToggle.TextColor3 = Color3.new(1, 1, 1)
+noclipToggle.Font = Enum.Font.Gotham
+noclipToggle.TextSize = 12
+noclipToggle.Parent = PlayerTab
+
+noclipToggle.MouseButton1Click:Connect(function()
+    Noclip = not Noclip
+    noclipToggle.Text = "Noclip: "..(Noclip and "ON" or "OFF")
+    noclipToggle.BackgroundColor3 = Noclip and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(60, 60, 60)
+    
+    if Noclip then
+        table.insert(FlyConnections, RunService.Stepped:Connect(function()
+            if Noclip and LocalPlayer.Character then
+                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.CanCollide = false
+                    end
+                end
+            end
+        end))
+    end
+end)
+
+-- ===== FPS BOOST =====
+local fpsBoostButton = Instance.new("TextButton")
+fpsBoostButton.Name = "FPSBoostButton"
+fpsBoostButton.Size = UDim2.new(1, -20, 0, 30)
+fpsBoostButton.Position = UDim2.new(0, 10, 0, #PlayerTab:GetChildren() * 55)
+fpsBoostButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+fpsBoostButton.BorderSizePixel = 0
+fpsBoostButton.Text = "FPS Boost"
+fpsBoostButton.TextColor3 = Color3.new(1, 1, 1)
+fpsBoostButton.Font = Enum.Font.Gotham
+fpsBoostButton.TextSize = 12
+fpsBoostButton.Parent = PlayerTab
+
+fpsBoostButton.MouseButton1Click:Connect(function()
+    local decalsyeeted = true
+    local g = game
+    local w = g:GetService("Workspace")
+    local l = g:GetService("Lighting")
+    local t = w:WaitForChild("Terrain")
+    t.WaterWaveSize = 0
+    t.WaterWaveSpeed = 0
+    t.WaterReflectance = 0
+    t.WaterTransparency = 0
+    l.GlobalShadows = false
+    l.FogEnd = 9e9
+    l.Brightness = 1
+    settings().Rendering.QualityLevel = "Level01"
+    
+    for i,v in pairs(g:GetDescendants()) do
+        if v:IsA("Part") or v:IsA("Union") or v:IsA("MeshPart") then
+            v.Material = "Plastic"
+            v.Reflectance = 0
+        elseif v:IsA("Decal") and decalsyeeted then
+            v.Transparency = 1
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Lifetime = NumberRange.new(0)
+        end
+    end
+end)
+
+-- ===== COMBAT TAB =====
+local CombatTab = TabFrames["Combat"]
+
+-- [Add combat features here following the same pattern as above]
+
+-- ===== VISUAL TAB =====
+local VisualTab = TabFrames["Visuals"]
+
+-- [Add visual features here following the same pattern as above]
+
+-- Initial notification
+local notify = Instance.new("TextLabel")
+notify.Name = "Notification"
+notify.Size = UDim2.new(0, 200, 0, 50)
+notify.Position = UDim2.new(1, -210, 1, -60)
+notify.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+notify.BorderSizePixel = 0
+notify.Text = "Gun Grounds Ultimate Loaded"
+notify.TextColor3 = Color3.new(1, 1, 1)
+notify.Font = Enum.Font.Gotham
+notify.TextSize = 14
+notify.Parent = ScreenGui
+
+game:GetService("TweenService"):Create(notify, TweenInfo.new(0.5), {Position = UDim2.new(1, -210, 1, -110)}):Play()
+wait(3)
+game:GetService("TweenService"):Create(notify, TweenInfo.new(0.5), {Position = UDim2.new(1, -210, 1, -60)}):Play()
+wait(0.5)
+notify:Destroy()
