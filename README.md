@@ -1,2 +1,3 @@
 # Zenith-HUB
--# Gun Simulator
+
+-- Open Sourced
